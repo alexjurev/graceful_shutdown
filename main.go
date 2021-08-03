@@ -14,61 +14,61 @@ import (
 const workerPoolSize = 4
 
 func main() {
-	// create the consumer
+	// создание пользователя
 	consumer := Consumer{
 		ingestChan: make(chan int, 1),
 		jobsChan:   make(chan int, workerPoolSize),
 	}
 
-	// Simulate external lib sending us 10 events per second
+	// Симуляция отправки ивентов
 	producer := Producer{callbackFunc: consumer.callbackFunc}
 	go producer.start()
 
-	// Set up cancellation context and waitgroup
+	// Контекст для завершения
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	// Start consumer with cancellation context passed
+	// Запуск пользователя
 	go consumer.startConsumer(ctx)
 
-	// Start workers and Add [workerPoolSize] to WaitGroup
+	// старт работников в WaitGroup
 	wg.Add(workerPoolSize)
 	for i := 0; i < workerPoolSize; i++ {
 		go consumer.workerFunc(wg, i)
 	}
 
-	// Handle sigterm and await termChan signal
+	// отлавливаем синал
 	termChan := make(chan os.Signal)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 	
-	<-termChan         // Blocks here until interrupted
+	<-termChan         // блокировка до прерывания
 
 	// Handle shutdown
 	fmt.Println("*********************************\nShutdown signal received\n*********************************")
-	cancelFunc()       // Signal cancellation to context.Context
-	wg.Wait()          // Block here until are workers are done
+	cancelFunc()       // завершение сигнала
+	wg.Wait()          // блокировка WaitGroup до конца работы всех каналов
 	
 	fmt.Println("All workers done, shutting down!")
 }
 
-// -- Consumer below here!
+// -- пользователь
 type Consumer struct {
 	ingestChan chan int
 	jobsChan   chan int
 }
 
-// callbackFunc is invoked each time the external lib passes an event to us.
+// callbackFunc
 func (c Consumer) callbackFunc(event int) {
 	c.ingestChan <- event
 }
 
-// workerFunc starts a single worker function that will range on the jobsChan until that channel closes.
+// workerFunc 
 func (c Consumer) workerFunc(wg *sync.WaitGroup, index int) {
 	defer wg.Done()
 
 	fmt.Printf("Worker %d starting\n", index)
 	for eventIndex := range c.jobsChan {
-		// simulate work  taking between 1-3 seconds
+		// симуляция работы со случайным временем
 		fmt.Printf("Worker %d started job %d\n", index, eventIndex)
 		time.Sleep(time.Millisecond * time.Duration(1000+rand.Intn(2000)))
 		fmt.Printf("Worker %d finished processing job %d\n", index, eventIndex)
@@ -76,7 +76,7 @@ func (c Consumer) workerFunc(wg *sync.WaitGroup, index int) {
 	fmt.Printf("Worker %d interrupted\n", index)
 }
 
-// startConsumer acts as the proxy between the ingestChan and jobsChan, with a select to support graceful shutdown.
+// startConsumer 
 func (c Consumer) startConsumer(ctx context.Context) {
 	for {
 		select {
@@ -91,8 +91,7 @@ func (c Consumer) startConsumer(ctx context.Context) {
 	}
 }
 
-// -- Producer simulates an external library that invokes the 
-// registered callback when it has new data for us once per 100ms.
+// Producer 
 type Producer struct {
     callbackFunc func(event int)
 }
